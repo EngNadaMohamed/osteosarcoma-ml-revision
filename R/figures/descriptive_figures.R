@@ -1,5 +1,3 @@
-# Run from the project root (open Revision_Reviewer_final.Rproj in RStudio first).
-
 # ============================================================
 # descriptive_figures.R
 # Descriptive figures for GSE218035: volcano plot, DEG heatmap,
@@ -127,34 +125,62 @@ p_pca <- ggplot(pca_df, aes(PC1, PC2, color = Group)) +
 ggsave(file.path(out_dir, "pca_plot.pdf"), p_pca, width = 6, height = 5)
 
 # ------------------------------------------------------------
-# 6. Map DEG symbols to Entrez IDs (org.Hs.eg.db via clusterProfiler::bitr)
+# 6. Map gene symbols to Entrez IDs (org.Hs.eg.db)
+#    Background universe = all genes tested by edgeR (expressed
+#    genes after filtering), not the whole genome.
 # ------------------------------------------------------------
 conv_deg <- bitr(rownames(edgeR_deg), fromType = "SYMBOL",
                  toType = "ENTREZID", OrgDb = org.Hs.eg.db)
 entrez_ids <- unique(conv_deg$ENTREZID)
-cat("DEGs mapped to Entrez:", length(entrez_ids), "\n")
+
+conv_universe <- bitr(rownames(edgeR_table), fromType = "SYMBOL",
+                      toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+universe_ids <- unique(conv_universe$ENTREZID)
+
+cat("DEGs mapped to Entrez:", length(entrez_ids),
+    "| background universe:", length(universe_ids), "genes\n")
+
+# Same multiple-testing rule for every enrichment analysis:
+# Benjamini-Hochberg adjusted p < 0.05 (no extra q-value filter).
+P_ADJ_METHOD <- "BH"
+P_ADJ_CUT    <- 0.05
 
 # ------------------------------------------------------------
 # 7. KEGG, Reactome and GO (over-representation)
 # ------------------------------------------------------------
 kegg_results <- enrichKEGG(gene = entrez_ids, organism = "hsa",
-                           keyType = "ncbi-geneid", pvalueCutoff = 0.05)
+                           keyType = "ncbi-geneid", universe = universe_ids,
+                           pAdjustMethod = P_ADJ_METHOD,
+                           pvalueCutoff = P_ADJ_CUT, qvalueCutoff = 1)
 write.csv(as.data.frame(kegg_results), file.path(out_dir, "KEGG_results.csv"), row.names = FALSE)
 ggsave(file.path(out_dir, "KEGG_dotplot.pdf"),
        dotplot(kegg_results, showCategory = 20, label_format = 50), width = 8, height = 7)
 
 reactome_results <- enrichPathway(gene = entrez_ids, organism = "human",
-                                  pAdjustMethod = "BH", pvalueCutoff = 0.05)
+                                  universe = universe_ids,
+                                  pAdjustMethod = P_ADJ_METHOD,
+                                  pvalueCutoff = P_ADJ_CUT, qvalueCutoff = 1)
 write.csv(as.data.frame(reactome_results), file.path(out_dir, "Reactome_results.csv"), row.names = FALSE)
 ggsave(file.path(out_dir, "Reactome_dotplot.pdf"),
        dotplot(reactome_results, showCategory = 20, label_format = 50), width = 8, height = 7)
 
 go_results <- enrichGO(gene = entrez_ids, OrgDb = org.Hs.eg.db,
                        keyType = "ENTREZID", ont = "BP",
-                       pAdjustMethod = "BH", pvalueCutoff = 0.05)
+                       universe = universe_ids,
+                       pAdjustMethod = P_ADJ_METHOD,
+                       pvalueCutoff = P_ADJ_CUT, qvalueCutoff = 1)
 write.csv(as.data.frame(go_results), file.path(out_dir, "GO_BP_results.csv"), row.names = FALSE)
+
+# Overlapping GO terms (many terms share the same genes): keep one
+# representative term per group of similar terms (semantic similarity > 0.7).
+go_simple <- if (nrow(as.data.frame(go_results)) > 0) {
+  simplify(go_results, cutoff = 0.7, by = "p.adjust", select_fun = min)
+} else go_results
+write.csv(as.data.frame(go_simple), file.path(out_dir, "GO_BP_results_simplified.csv"), row.names = FALSE)
+cat("GO BP terms:", nrow(as.data.frame(go_results)),
+    "| after removing redundant terms:", nrow(as.data.frame(go_simple)), "\n")
 ggsave(file.path(out_dir, "GO_BP_dotplot.pdf"),
-       dotplot(go_results, showCategory = 30, label_format = 50), width = 8, height = 9)
+       dotplot(go_simple, showCategory = 30, label_format = 50), width = 8, height = 9)
 
 # ------------------------------------------------------------
 # 8. GSEA on Hallmark gene sets (all genes, ranked)
@@ -174,13 +200,18 @@ gene_list <- ranked %>%
   distinct(ENTREZID, .keep_all = TRUE)
 gene_list <- setNames(gene_list$rank_metric, gene_list$ENTREZID)
 
-# msigdbr >= 10 uses `collection`; older versions use `category`
-hallmark <- tryCatch(msigdbr(species = "Homo sapiens", collection = "H"),
-                     error = function(e) msigdbr(species = "Homo sapiens", category = "H")) %>%
-  dplyr::select(gs_name, entrez_gene) %>%
-  filter(!is.na(entrez_gene))
+# msigdbr >= 10 uses `collection` and `ncbi_gene`; older versions use `category` and `entrez_gene`
+hallmark_raw <- tryCatch(msigdbr(species = "Homo sapiens", collection = "H"),
+                         error = function(e) msigdbr(species = "Homo sapiens", category = "H"))
+entrez_col <- intersect(c("ncbi_gene", "entrez_gene"), colnames(hallmark_raw))[1]
+hallmark <- hallmark_raw %>%
+  dplyr::select(gs_name, entrez = all_of(entrez_col)) %>%
+  filter(!is.na(entrez))
+cat("Hallmark gene sets:", length(unique(hallmark$gs_name)), "\n")
 
-gsea_results <- GSEA(gene_list, TERM2GENE = hallmark, pvalueCutoff = 0.05, seed = TRUE)
+gsea_results <- GSEA(gene_list, TERM2GENE = hallmark,
+                     pAdjustMethod = P_ADJ_METHOD, pvalueCutoff = P_ADJ_CUT,
+                     seed = TRUE)
 gsea_df <- as.data.frame(gsea_results)
 write.csv(gsea_df, file.path(out_dir, "GSEA_Hallmark_results.csv"), row.names = FALSE)
 
@@ -205,4 +236,9 @@ if (nrow(gsea_df) > 0) {
 writeLines(capture.output(sessionInfo()), file.path(out_dir, "sessionInfo.txt"))
 cat("All figures and tables saved in:", out_dir, "\n")
 
+# Summary of enrichment results (all BH-adjusted p < 0.05, same background)
+cat("\nSignificant terms -> KEGG:", nrow(as.data.frame(kegg_results)),
+    "| Reactome:", nrow(as.data.frame(reactome_results)),
+    "| GO BP (simplified):", nrow(as.data.frame(go_simple)),
+    "| GSEA Hallmark:", nrow(gsea_df), "\n")
 head(gsea_df[, c("ID", "NES", "p.adjust")], 15)
