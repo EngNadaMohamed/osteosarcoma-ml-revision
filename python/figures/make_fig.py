@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({"font.family":"DejaVu Sans","font.size":9,"axes.spines.top":False,"axes.spines.right":False})
 from pathlib import Path
 DATA = Path(__file__).resolve().parents[2] / "data"
-PERM = DATA / "perm_out_grouped"          # output of permutation_test_clean.py
+PERM = DATA / "perm_out_grouped_within_patient"          # output of permutation_test_clean.py
 OUT = DATA / "figures"
 OUT.mkdir(parents=True, exist_ok=True)
 
