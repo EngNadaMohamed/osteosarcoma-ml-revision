@@ -8,24 +8,28 @@ analyses, external validation and clinical-covariate checks.
 
 ## Data
 
-The data are public and are not included in this repository. Download them from GEO
-and place them in a `data/` folder at the project root:
+**GSE218035 (training; 23 osteosarcoma, 13 adjacent normal).** The processed input files,
+derived from the GEO data of GSE218035, are included in `data/`, so the pipeline can be run
+directly from step 1:
+
+| File in `data/` | Content |
+|---|---|
+| `raw_counts_data.csv` | gene-level read counts (genes × samples), used by edgeR |
+| `filtered_counts_before_edgeR_revision.csv` | CPM values (genes × samples), used to build the folds and the features |
+| `combined_output.csv` | CPM values with gene annotation columns `#ID`, `Gene_type`, `Symbol`, used by the nested cross-validation |
+| `meta_revision_with_patient_id.csv` | sample labels (`source_name`) and patient IDs (`patient_id`) |
+| `metadata.csv` | SRA run table with `AGE`, `sex` and `Site` |
+
+Patient IDs were taken from the `individual` field of each GSE218035 sample on GEO
+(36 samples, 23 patients, 13 with a paired tumour and normal sample);
+`python/prep/add_patient_ids.py` documents this mapping.
+
+**External cohorts.** These are not included; download them from GEO and place them in `data/`:
 
 | Dataset | Files expected in `data/` |
 |---|---|
-| GSE218035 (training; 23 osteosarcoma, 13 adjacent normal) | `raw_counts_data.csv` (raw counts, genes × samples), `meta_revision_with_patient_id.csv` (columns `source_name`, `patient_id`), `metadata.csv` (SRA run table with `AGE`, `sex`, `Site`) |
-| GSE99671 (external validation; 18 tumour, 18 paired normal bone) | `GSE99671/GSE99671_Osteosarcoma_filecounts.txt`, `GSE99671/GSE99671_series_matrix.txt` |
-| GSE253548 (external validation; FFPE, samples annotated as `tissue: bone`) | `GSE253548/GSE253548_NormCountsSalmonFFPEOS_12012024.xlsx` and the GEO series matrix |
-
-Patient IDs: `meta_revision_with_patient_id.csv` is created by `python/prep/add_patient_ids.py`
-from `data/meta_revision.csv` (GSM sample IDs and the tumour/normal label `source_name` from
-the GEO sample annotations). The patient IDs come from the `individual` field of each GSE218035
-sample on GEO (36 samples, 23 patients, 13 with a paired tumour and normal sample).
-
-Two CPM matrices derived from the GSE218035 counts are also expected in `data/`:
-`filtered_counts_before_edgeR_revision.csv` (genes × samples, used to build the folds)
-and `combined_output.csv` (CPM with gene annotation columns `#ID`, `Gene_type`, `Symbol`,
-used by the nested cross-validation).
+| GSE99671 (18 tumour, 18 paired normal bone; fresh-frozen) | `GSE99671/GSE99671_Osteosarcoma_filecounts.txt`, `GSE99671/GSE99671_series_matrix.txt` |
+| GSE253548 (FFPE; samples annotated as `tissue: bone`) | `GSE253548/GSE253548_NormCountsSalmonFFPEOS_12012024.xlsx` and the GEO series matrix |
 
 ## How to run
 
