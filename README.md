@@ -17,6 +17,11 @@ and place them in a `data/` folder at the project root:
 | GSE99671 (external validation; 18 tumour, 18 paired normal bone) | `GSE99671/GSE99671_Osteosarcoma_filecounts.txt`, `GSE99671/GSE99671_series_matrix.txt` |
 | GSE253548 (external validation; FFPE, samples annotated as `tissue: bone`) | `GSE253548/GSE253548_NormCountsSalmonFFPEOS_12012024.xlsx` and the GEO series matrix |
 
+Patient IDs: `meta_revision_with_patient_id.csv` is created by `python/prep/add_patient_ids.py`
+from `data/meta_revision.csv` (GSM sample IDs and the tumour/normal label `source_name` from
+the GEO sample annotations). The patient IDs come from the `individual` field of each GSE218035
+sample on GEO (36 samples, 23 patients, 13 with a paired tumour and normal sample).
+
 Two CPM matrices derived from the GSE218035 counts are also expected in `data/`:
 `filtered_counts_before_edgeR_revision.csv` (genes × samples, used to build the folds)
 and `combined_output.csv` (CPM with gene annotation columns `#ID`, `Gene_type`, `Symbol`,
