@@ -1,4 +1,4 @@
-"""Label-permutation test (100 permutations).
+"""Label-permutation test with patient-structured permutations (430 permutations).
 
 Uses permuted labels and per-fold DEGs produced by R/permutation_test_clean.R,
 re-trains all 31 configurations on the same patient-grouped folds, and compares
@@ -18,7 +18,9 @@ from train_model_clean_id import get_model_pool, build_combination
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 FOLD_ROOT = DATA / "revision_folds_grouped"
-PERM_DIR = DATA / "perm_out_grouped"
+# Must match PERM_MODE in R/permutation_test_clean.R
+PERM_MODE = "within_patient"          # "within_patient" (main) or "sample"
+PERM_DIR = DATA / f"perm_out_grouped_{PERM_MODE}"
 REAL_BY_FOLD = DATA / "revision_fold_results" / "main_results_by_fold_id.csv"
 
 K_BEST = 10
@@ -158,3 +160,5 @@ summary.to_csv(PERM_DIR / "perm_summary.csv", index=False)
 pd.concat(per_model_all).to_csv(PERM_DIR / "perm_per_model_pvalues.csv")
 
 print("\n" + summary.round(4).to_string(index=False))
+
+
