@@ -1,9 +1,9 @@
-import pandas as pd, numpy as np
+import sys, pandas as pd, numpy as np
 from scipy import stats
 from pathlib import Path
 
 # ============================================================
-# Paths (relative to the project root)
+# Paths (edit DATA if your project folder moves)
 # ============================================================
 DATA = Path(__file__).resolve().parents[2] / "data"
 RAW = DATA / "raw_counts_data.csv"                       # raw counts, GSE218035
@@ -19,9 +19,9 @@ assert (m.patient_id.astype(str)==m.Individual.astype(str)).all()
 m['tumour']=m.source_name.str.startswith('Osteo')
 tu,no=m[m.tumour],m[~m.tumour]
 print('Age tumour median [IQR]:',tu.AGE.median(),tu.AGE.quantile([.25,.75]).tolist(),'| normal:',no.AGE.median(),no.AGE.quantile([.25,.75]).tolist())
-print('Mann-Whitney age:', stats.mannwhitneyu(tu.AGE,no.AGE))
+print('Mann-Whitney age (sample level, descriptive only):', stats.mannwhitneyu(tu.AGE,no.AGE))
 for c in ['sex','Site']:
-    ct=pd.crosstab(m.tumour,m[c]); print(ct); print('Fisher',c,stats.fisher_exact(ct))
+    ct=pd.crosstab(m.tumour,m[c]); print(ct); print('Fisher',c,'(sample level, descriptive only)',stats.fisher_exact(ct))
 pairs=m.groupby('patient_id').source_name.nunique(); pp=pairs[pairs==2].index
 print('paired patients:',len(pp),'| identical age/sex/site within pair:',
       all(m[m.patient_id==p][['AGE','sex','Site']].nunique().max()==1 for p in pp))
@@ -37,3 +37,21 @@ for lab,d in [('tumour',tu.index),('normal',no.index)]:
 print(m.loc[['GSM6733226','GSM6733234','GSM6733244','GSM6733240'],['source_name','patient_id','AGE','sex','Site','muscle']].round(2))
 m[['source_name','patient_id','AGE','sex','Site','muscle']].to_csv(OUT / 'sample_covariates.csv')
 print('Saved:', OUT / 'sample_covariates.csv')
+
+# ------------------------------------------------------------
+# Patient-level comparison (one row per patient).
+# All normal samples come from paired patients, so class differences in
+# clinical variables can only come from the tumour-only patients.
+# ------------------------------------------------------------
+n_per_patient = m.groupby('patient_id').size()
+pt = m.groupby('patient_id')[['AGE', 'sex', 'Site']].first()
+pt['paired'] = n_per_patient == 2
+print('\nPatient level: paired =', pt.paired.sum(), '| tumour-only =', (~pt.paired).sum())
+print(pt.groupby('paired').AGE.describe())
+print('Mann-Whitney age (tumour-only vs paired patients):',
+      stats.mannwhitneyu(pt.AGE[~pt.paired], pt.AGE[pt.paired]))
+for c in ['sex', 'Site']:
+    ct = pd.crosstab(pt.paired, pt[c]); print(ct)
+    print('Fisher', c, '(patient level):', stats.fisher_exact(ct))
+
+
